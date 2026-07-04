@@ -1,0 +1,65 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build outputs
+dist/
+build/
+.next/
+out/
+.expo/
+.astro/
+
+# turbo cache
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+
+# env files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# certificates / private keys
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+
+*.swp
+*.swo
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# test coverage
+coverage/
+
+# Expo
+ios/
+android/
+
+# session artifacts (prompts, graphify, backups)
+graphify-out/
+last-session.md
+last-session/
+terminal-configuration
+backup*/
+/web/
+*-PROMPT.md
+PROMPT-*.md
+FASE-*.md
+PROMPTS-*.md
+*-prompt.md
+RAG-*.md
+VALIDACION-*.md

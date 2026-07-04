@@ -1,0 +1,26 @@
+{
+  "name": "arandil",
+  "version": "0.0.1",
+  "packageManager": "pnpm@9.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "infisical run --env=dev -- pnpm --filter api dev:plain",
+    "dev:mobile": "pnpm --filter mobile dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:migrate": "bash infra/scripts/db-migrate.sh",
+    "db:seed": "bash infra/scripts/seed.sh",
+    "docker:dev": "docker compose -f infra/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.18",
+    "typescript": "^5.7.2"
+  }
+}
