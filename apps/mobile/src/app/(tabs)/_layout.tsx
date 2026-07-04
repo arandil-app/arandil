@@ -24,6 +24,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="practice"
+        options={{
+          title: 'Practicar',
+          headerTitle: 'Práctica',
+        }}
+      />
+      <Tabs.Screen
         name="progress"
         options={{
           title: 'Progreso',

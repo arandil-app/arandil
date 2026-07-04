@@ -1,7 +1,9 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useUserStore } from '../../stores/user.store';
 
 export default function Dashboard() {
+  const router = useRouter();
   const { user } = useUserStore();
 
   return (
@@ -28,7 +30,10 @@ export default function Dashboard() {
         )}
 
         {/* CTA */}
-        <TouchableOpacity style={styles.primaryButton}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => router.push('/(tabs)/practice')}
+        >
           <Text style={styles.primaryButtonText}>Comenzar práctica</Text>
         </TouchableOpacity>
 
