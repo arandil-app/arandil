@@ -1,0 +1,18 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "paths": {
+      "@arandil/core": [
+        "../../packages/core/dist"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "app.json",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
