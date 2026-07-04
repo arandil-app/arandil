@@ -6,6 +6,7 @@ import { env } from './lib/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import logger from './lib/logger.js';
 import healthRouter from './routes/health.js';
+import practiceRouter from './routes/practice.js';
 
 // ─── App + middleware ──────────────────────────────────────────────────────
 
@@ -24,9 +25,7 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Rutas ──────────────────────────────────────────────────────────────────
 
 app.use('/', healthRouter);
-
-// TODO: Add API routes
-// app.use('/api/v1', router);
+app.use('/practice', practiceRouter);
 
 app.use(notFound);
 app.use(errorHandler);
