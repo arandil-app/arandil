@@ -7,6 +7,7 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 import logger from './lib/logger.js';
 import healthRouter from './routes/health.js';
 import practiceRouter from './routes/practice.js';
+import profileRouter from './routes/profile.js';
 
 // ─── App + middleware ──────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/', healthRouter);
 app.use('/practice', practiceRouter);
+app.use('/user', profileRouter);
 
 app.use(notFound);
 app.use(errorHandler);

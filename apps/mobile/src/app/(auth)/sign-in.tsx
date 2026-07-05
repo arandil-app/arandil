@@ -25,7 +25,9 @@ export default function SignIn() {
     if (error) {
       Alert.alert('Error', error.message);
     } else {
-      router.replace('/(tabs)');
+      // Route through the auth gate (not directly to tabs) so it can
+      // check onboarding_completed and send first-time users to onboarding.
+      router.replace('/');
     }
   }
 

@@ -41,12 +41,31 @@ export async function authMiddleware(
     [data.user.id]
   );
 
-  if (result.rows.length === 0) {
-    res.status(401).json({ error: 'User not found' });
+  if (result.rows.length > 0) {
+    (req as AuthRequest).supabaseId = data.user.id;
+    (req as AuthRequest).userId = result.rows[0]!.id;
+    next();
     return;
   }
 
-  (req as AuthRequest).supabaseId = data.user.id;
-  (req as AuthRequest).userId = result.rows[0]!.id;
-  next();
+  // First authenticated request for this Supabase user — provision the
+  // app-side users row lazily (no Supabase webhook/trigger infra yet).
+  // onboarding_completed defaults to false, so the onboarding gate picks
+  // up new signups automatically.
+  try {
+    const insertResult = await pool.query<{ id: string }>(
+      `INSERT INTO users (supabase_id, email)
+       VALUES ($1, $2)
+       ON CONFLICT (supabase_id) DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      [data.user.id, data.user.email ?? '']
+    );
+
+    (req as AuthRequest).supabaseId = data.user.id;
+    (req as AuthRequest).userId = insertResult.rows[0]!.id;
+    next();
+  } catch (provisionError) {
+    console.error('[auth] Failed to provision user row:', provisionError);
+    res.status(500).json({ error: 'Failed to provision user' });
+  }
 }

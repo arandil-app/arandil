@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useUserStore } from '../stores/user.store';
 import { supabase } from '../lib/supabase';
+import { getProfile } from '../services/api';
 
 export default function Index() {
   const router = useRouter();
@@ -10,13 +11,40 @@ export default function Index() {
 
   useEffect(() => {
     // Check current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser({
           id: session.user.id,
           email: session.user.email || '',
         });
-        router.replace('/(tabs)');
+
+        // Onboarding gate: fetch profile to decide onboarding vs dashboard.
+        // If the profile fetch fails (e.g. network hiccup), fail open to the
+        // dashboard rather than trapping the user on a blank loading screen —
+        // practice screens degrade gracefully with their own error/retry states.
+        try {
+          const profile = await getProfile();
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            name: profile.name ?? undefined,
+            subjectFocus: profile.subject_focus ?? undefined,
+            learningGoal: profile.learning_goal ?? undefined,
+            studyMinutesDay: profile.study_minutes_day ?? undefined,
+            mathLevel: profile.math_level ?? undefined,
+            preferredTopic: profile.preferred_topic ?? undefined,
+            onboardingCompleted: profile.onboarding_completed,
+          });
+
+          if (!profile.onboarding_completed) {
+            router.replace('/(onboarding)/level');
+          } else {
+            router.replace('/(tabs)');
+          }
+        } catch (error) {
+          console.error('[auth-gate] Failed to fetch profile:', error);
+          router.replace('/(tabs)');
+        }
       } else {
         setUser(null);
         router.replace('/(auth)/sign-in');

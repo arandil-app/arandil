@@ -45,14 +45,17 @@ router.get('/next', authMiddleware, async (req: AuthRequest, res) => {
       });
     }
 
-    // No due cards — create new one from question pool
+    // No due cards — create new one from question pool.
+    // Prioritize the user's preferred_topic (set during onboarding) when available,
+    // falling back to any approved topic once that pool is exhausted.
     const newQuestionResult = await pool.query<Question>(
-      `SELECT q.* FROM questions q
-       WHERE q.approved = true
+      `SELECT q.* FROM questions q, users u
+       WHERE u.id = $1
+       AND q.approved = true
        AND q.id NOT IN (
          SELECT question_id FROM cards WHERE user_id = $1
        )
-       ORDER BY RANDOM()
+       ORDER BY (q.topic = u.preferred_topic) DESC, RANDOM()
        LIMIT 1`,
       [userId]
     );

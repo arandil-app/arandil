@@ -39,10 +39,17 @@ export default function Profile() {
           <Text style={styles.email}>{user?.email}</Text>
         </View>
 
-        {user?.subjectFocus && (
+        {user?.preferredTopic && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Enfoque actual</Text>
-            <Text style={styles.sectionValue}>{user.subjectFocus}</Text>
+            <Text style={styles.sectionTitle}>Tema preferido</Text>
+            <Text style={styles.sectionValue}>{user.preferredTopic}</Text>
+          </View>
+        )}
+
+        {user?.mathLevel && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Nivel</Text>
+            <Text style={styles.sectionValue}>{user.mathLevel}</Text>
           </View>
         )}
 
@@ -50,6 +57,13 @@ export default function Profile() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Objetivo</Text>
             <Text style={styles.sectionValue}>{user.learningGoal}</Text>
+          </View>
+        )}
+
+        {user?.studyMinutesDay && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tiempo diario</Text>
+            <Text style={styles.sectionValue}>{user.studyMinutesDay} minutos/día</Text>
           </View>
         )}
 
