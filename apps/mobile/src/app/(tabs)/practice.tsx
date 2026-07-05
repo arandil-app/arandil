@@ -18,33 +18,43 @@ export default function Practice() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showSolution, setShowSolution] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadNextCard();
   }, []);
 
-  async function loadNextCard() {
+  async function loadNextCard(retryCount = 0) {
     setLoading(true);
     setSelectedIndex(null);
     setShowSolution(false);
     setStartTime(Date.now());
+    setError(null);
 
     try {
       const data = await getNextCard();
       setCard(data.card);
       setQuestion(data.question);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar la siguiente pregunta');
-      console.error(error);
+    } catch (err) {
+      console.error('[loadNextCard] Error:', err);
+      setError('No se pudo cargar la pregunta');
+
+      // Retry logic: up to 2 retries with exponential backoff
+      if (retryCount < 2) {
+        setTimeout(() => {
+          loadNextCard(retryCount + 1);
+        }, 1000 * (retryCount + 1)); // 1s, 2s
+      }
     } finally {
       setLoading(false);
     }
   }
 
   async function handleSubmitReview(rating: 'again' | 'hard' | 'good' | 'easy') {
-    if (!card || !question || selectedIndex === null) return;
+    if (!card || !question || selectedIndex === null || submitting) return;
 
     setSubmitting(true);
+    setError(null);
 
     try {
       const correct = selectedIndex === question.correct_index;
@@ -54,11 +64,10 @@ export default function Practice() {
 
       // Load next card
       loadNextCard();
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo enviar la respuesta');
-      console.error(error);
-    } finally {
-      setSubmitting(false);
+    } catch (err) {
+      console.error('[handleSubmitReview] Error:', err);
+      setError('No se pudo enviar la respuesta. Intenta de nuevo.');
+      setSubmitting(false); // Allow retry
     }
   }
 
@@ -80,6 +89,18 @@ export default function Practice() {
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#4F6AF5" />
         <Text style={styles.loadingText}>Cargando pregunta...</Text>
+      </View>
+    );
+  }
+
+  if (error && !question) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>⚠️</Text>
+        <Text style={styles.errorTitle}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => loadNextCard()}>
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -159,6 +180,13 @@ export default function Practice() {
           </View>
         )}
 
+        {/* Error banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+          </View>
+        )}
+
         {/* Actions */}
         {!showSolution ? (
           <TouchableOpacity
@@ -173,34 +201,53 @@ export default function Practice() {
             <Text style={styles.ratingTitle}>¿Qué tal te fue?</Text>
             <View style={styles.ratingButtons}>
               <TouchableOpacity
-                style={[styles.ratingButton, styles.ratingAgain]}
+                style={[
+                  styles.ratingButton,
+                  styles.ratingAgain,
+                  submitting && styles.buttonDisabled,
+                ]}
                 onPress={() => handleSubmitReview('again')}
                 disabled={submitting}
               >
                 <Text style={styles.ratingButtonText}>Otra vez</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.ratingButton, styles.ratingHard]}
+                style={[
+                  styles.ratingButton,
+                  styles.ratingHard,
+                  submitting && styles.buttonDisabled,
+                ]}
                 onPress={() => handleSubmitReview('hard')}
                 disabled={submitting}
               >
                 <Text style={styles.ratingButtonText}>Difícil</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.ratingButton, styles.ratingGood]}
+                style={[
+                  styles.ratingButton,
+                  styles.ratingGood,
+                  submitting && styles.buttonDisabled,
+                ]}
                 onPress={() => handleSubmitReview('good')}
                 disabled={submitting}
               >
                 <Text style={styles.ratingButtonText}>Bien</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.ratingButton, styles.ratingEasy]}
+                style={[
+                  styles.ratingButton,
+                  styles.ratingEasy,
+                  submitting && styles.buttonDisabled,
+                ]}
                 onPress={() => handleSubmitReview('easy')}
                 disabled={submitting}
               >
                 <Text style={styles.ratingButtonText}>Fácil</Text>
               </TouchableOpacity>
             </View>
+            {submitting && (
+              <ActivityIndicator size="small" color="#4F6AF5" style={{ marginTop: 12 }} />
+            )}
           </View>
         )}
       </View>
@@ -244,6 +291,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748B',
     textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#EF4444',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#4F6AF5',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    color: '#991B1B',
+    fontSize: 14,
   },
   topicBadge: {
     backgroundColor: '#EEF2FF',

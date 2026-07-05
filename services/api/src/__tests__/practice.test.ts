@@ -3,11 +3,15 @@ import request from 'supertest';
 import express from 'express';
 import practiceRouter from '../routes/practice.js';
 
+// Create mock pool object
+const mockQuery = vi.fn();
+const mockPool = {
+  query: mockQuery,
+};
+
 // Mock dependencies
 vi.mock('../db/client.js', () => ({
-  getPool: vi.fn(() => ({
-    query: vi.fn(),
-  })),
+  getPool: vi.fn(() => mockPool),
 }));
 
 vi.mock('../middleware/auth.js', () => ({
@@ -50,23 +54,22 @@ app.use(express.json());
 app.use('/practice', practiceRouter);
 
 describe('Practice API', () => {
-  let mockPool: any;
-
-  beforeEach(async () => {
-    const { getPool } = await import('../db/client.js');
-    mockPool = (getPool as any)();
+  beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe('GET /practice/next', () => {
     it('returns existing due card', async () => {
-      mockPool.query
+      const cardId = '550e8400-e29b-41d4-a716-446655440000';
+      const questionId = '550e8400-e29b-41d4-a716-446655440001';
+
+      mockQuery
         .mockResolvedValueOnce({
           rows: [
             {
-              id: 'card-123',
+              id: cardId,
               user_id: 'test-user-id',
-              question_id: 'q-456',
+              question_id: questionId,
               due: new Date(),
               state: 1,
               reps: 2,
@@ -76,7 +79,7 @@ describe('Practice API', () => {
         .mockResolvedValueOnce({
           rows: [
             {
-              id: 'q-456',
+              id: questionId,
               topic: 'algebra',
               subtopic: 'linear_equations',
               stem: '2x + 5 = 13',
@@ -91,35 +94,38 @@ describe('Practice API', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('card');
       expect(res.body).toHaveProperty('question');
-      expect(res.body.card.id).toBe('card-123');
+      expect(res.body.card.id).toBe(cardId);
       expect(res.body.question.topic).toBe('algebra');
     });
 
     it('creates new card when no due cards exist', async () => {
-      mockPool.query
+      const questionId = '550e8400-e29b-41d4-a716-446655440002';
+      const newCardId = '550e8400-e29b-41d4-a716-446655440003';
+
+      mockQuery
         .mockResolvedValueOnce({ rows: [] }) // No due cards
         .mockResolvedValueOnce({
           // New question
           rows: [
             {
-              id: 'new-q-789',
+              id: questionId,
               topic: 'geometry',
               stem: 'Pythagorean theorem question',
               approved: true,
             },
           ],
         })
-        .mockResolvedValueOnce({ rows: [{ id: 'new-card-id' }] }); // Insert result
+        .mockResolvedValueOnce({ rows: [{ id: newCardId }] }); // Insert result
 
       const res = await request(app).get('/practice/next');
 
       expect(res.status).toBe(200);
-      expect(res.body.question.id).toBe('new-q-789');
-      expect(mockPool.query).toHaveBeenCalledTimes(3);
+      expect(res.body.question.id).toBe(questionId);
+      expect(mockQuery).toHaveBeenCalledTimes(3);
     });
 
     it('returns message when no cards available', async () => {
-      mockPool.query
+      mockQuery
         .mockResolvedValueOnce({ rows: [] }) // No due cards
         .mockResolvedValueOnce({ rows: [] }); // No new questions
 
@@ -133,14 +139,17 @@ describe('Practice API', () => {
 
   describe('POST /practice/review', () => {
     it('updates card after review', async () => {
-      mockPool.query
+      const cardId = '550e8400-e29b-41d4-a716-446655440004';
+      const questionId = '550e8400-e29b-41d4-a716-446655440005';
+
+      mockQuery
         .mockResolvedValueOnce({
           // Get card
           rows: [
             {
-              id: 'card-123',
+              id: cardId,
               user_id: 'test-user-id',
-              question_id: 'q-456',
+              question_id: questionId,
               difficulty: 0.3,
               stability: 0.3,
               elapsed_days: 0,
@@ -157,7 +166,7 @@ describe('Practice API', () => {
         .mockResolvedValueOnce({ rows: [] }); // Update query
 
       const res = await request(app).post('/practice/review').send({
-        card_id: 'card-123',
+        card_id: cardId,
         rating: 'good',
         correct: true,
         response_time_ms: 5000,
@@ -166,12 +175,25 @@ describe('Practice API', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.card).toHaveProperty('due');
-      expect(mockPool.query).toHaveBeenCalledTimes(2);
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+
+    it('returns 400 for missing fields', async () => {
+      const cardId = '550e8400-e29b-41d4-a716-446655440006';
+
+      const res = await request(app).post('/practice/review').send({
+        card_id: cardId,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Missing required fields');
     });
 
     it('returns 400 for invalid rating', async () => {
+      const cardId = '550e8400-e29b-41d4-a716-446655440007';
+
       const res = await request(app).post('/practice/review').send({
-        card_id: 'card-123',
+        card_id: cardId,
         rating: 'invalid',
       });
 
@@ -179,11 +201,23 @@ describe('Practice API', () => {
       expect(res.body.error).toContain('Invalid rating');
     });
 
+    it('returns 400 for invalid card_id format', async () => {
+      const res = await request(app).post('/practice/review').send({
+        card_id: 'not-a-uuid',
+        rating: 'good',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Invalid card_id format');
+    });
+
     it('returns 404 for non-existent card', async () => {
-      mockPool.query.mockResolvedValueOnce({ rows: [] });
+      const cardId = '550e8400-e29b-41d4-a716-446655440008';
+
+      mockQuery.mockResolvedValueOnce({ rows: [] });
 
       const res = await request(app).post('/practice/review').send({
-        card_id: 'nonexistent',
+        card_id: cardId,
         rating: 'good',
       });
 
@@ -194,7 +228,7 @@ describe('Practice API', () => {
 
   describe('GET /practice/stats', () => {
     it('returns practice statistics', async () => {
-      mockPool.query
+      mockQuery
         .mockResolvedValueOnce({ rows: [{ count: '15' }] }) // Total cards
         .mockResolvedValueOnce({ rows: [{ count: '3' }] }) // Due cards
         .mockResolvedValueOnce({
@@ -204,7 +238,9 @@ describe('Practice API', () => {
             { state: 1, count: '3' },
             { state: 2, count: '7' },
           ],
-        });
+        })
+        .mockResolvedValueOnce({ rows: [{ days: '5' }] }) // Streak
+        .mockResolvedValueOnce({ rows: [{ accuracy: '78.5' }] }); // Accuracy
 
       const res = await request(app).get('/practice/stats');
 
@@ -214,6 +250,8 @@ describe('Practice API', () => {
       expect(res.body.cards_new).toBe(5);
       expect(res.body.cards_learning).toBe(3);
       expect(res.body.cards_review).toBe(7);
+      expect(res.body.streak_days).toBe(5);
+      expect(res.body.accuracy_percent).toBe(78.5);
     });
   });
 });

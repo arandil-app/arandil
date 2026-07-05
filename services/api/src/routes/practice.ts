@@ -109,12 +109,33 @@ router.post('/review', authMiddleware, async (req: AuthRequest, res) => {
   const userId = req.userId!;
   const { card_id, rating, correct, response_time_ms } = req.body;
 
+  // Validate required fields
   if (!card_id || !rating) {
     return res.status(400).json({ error: 'Missing required fields: card_id, rating' });
   }
 
+  // Validate rating enum
   if (!['again', 'hard', 'good', 'easy'].includes(rating)) {
     return res.status(400).json({ error: 'Invalid rating. Must be: again, hard, good, easy' });
+  }
+
+  // Validate card_id format (UUID)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(card_id)) {
+    return res.status(400).json({ error: 'Invalid card_id format' });
+  }
+
+  // Validate correct (if provided)
+  if (correct !== undefined && typeof correct !== 'boolean') {
+    return res.status(400).json({ error: 'Field "correct" must be boolean' });
+  }
+
+  // Validate response_time_ms (if provided)
+  if (response_time_ms !== undefined) {
+    const responseTime = parseInt(response_time_ms, 10);
+    if (isNaN(responseTime) || responseTime < 0 || responseTime > 600000) {
+      return res.status(400).json({ error: 'Field "response_time_ms" must be 0-600000' });
+    }
   }
 
   try {
@@ -140,7 +161,7 @@ router.post('/review', authMiddleware, async (req: AuthRequest, res) => {
        SET difficulty = $1, stability = $2, elapsed_days = $3, scheduled_days = $4,
            learning_steps = $5, reps = $6, lapses = $7, state = $8, due = $9, last_review = $10,
            updated_at = NOW()
-       WHERE id = $11`,
+       WHERE id = $11 AND user_id = $12`,
       [
         updatedCard.difficulty,
         updatedCard.stability,
@@ -153,6 +174,7 @@ router.post('/review', authMiddleware, async (req: AuthRequest, res) => {
         updatedCard.due,
         updatedCard.last_review,
         card_id,
+        userId, // Extra safety: verify user_id in UPDATE
       ]
     );
 
@@ -163,8 +185,9 @@ router.post('/review', authMiddleware, async (req: AuthRequest, res) => {
         due: updatedCard.due,
         state: updatedCard.state,
         reps: updatedCard.reps,
-        next_review_in_days: Math.ceil(
-          (updatedCard.due.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        next_review_in_days: Math.max(
+          0,
+          Math.ceil((updatedCard.due.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
         ),
       },
     });
@@ -203,6 +226,51 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res) => {
       return acc;
     }, {} as Record<number, number>);
 
+    // Streak calculation: consecutive days with completed sessions
+    const streakResult = await pool.query<{ days: number }>(
+      `WITH daily_activity AS (
+        SELECT DATE(started_at) as day
+        FROM sessions
+        WHERE user_id = $1 AND completed_at IS NOT NULL
+        GROUP BY DATE(started_at)
+        ORDER BY DATE(started_at) DESC
+      ),
+      streak AS (
+        SELECT day,
+               ROW_NUMBER() OVER (ORDER BY day DESC) as rn,
+               day - INTERVAL '1 day' * ROW_NUMBER() OVER (ORDER BY day DESC) as streak_group
+        FROM daily_activity
+      )
+      SELECT COUNT(*) as days
+      FROM streak
+      WHERE streak_group = (
+        SELECT streak_group
+        FROM streak
+        WHERE day = CURRENT_DATE OR day = CURRENT_DATE - INTERVAL '1 day'
+        LIMIT 1
+      )`,
+      [userId]
+    );
+
+    const streakDays = parseInt(String(streakResult.rows[0]?.days || 0), 10);
+
+    // Accuracy calculation: % of correct responses
+    const accuracyResult = await pool.query<{ accuracy: string }>(
+      `SELECT COALESCE(
+        ROUND(
+          (SUM(CASE WHEN is_correct THEN 1 ELSE 0 END)::NUMERIC / NULLIF(COUNT(*), 0)) * 100,
+          1
+        ),
+        0
+      ) as accuracy
+      FROM session_responses sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE s.user_id = $1`,
+      [userId]
+    );
+
+    const accuracyPercent = parseFloat(accuracyResult.rows[0]?.accuracy || '0');
+
     return res.json({
       total_cards: parseInt(totalCardsResult.rows[0]?.count || '0', 10),
       cards_due_today: parseInt(dueCardsResult.rows[0]?.count || '0', 10),
@@ -210,8 +278,8 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res) => {
       cards_learning: stateCounts[1] || 0,
       cards_review: stateCounts[2] || 0,
       cards_relearning: stateCounts[3] || 0,
-      streak_days: 0, // TODO: calculate from sessions
-      accuracy_percent: 0, // TODO: calculate from session_responses
+      streak_days: streakDays,
+      accuracy_percent: accuracyPercent,
     });
   } catch (error) {
     console.error('[practice/stats] Error:', error);
